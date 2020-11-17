@@ -53,6 +53,7 @@ import torch.nn.functional as F
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
 from sklearn.base import is_classifier
 from sklearn.metrics import f1_score
+from sklearn import preprocessing
 from sklearn.utils.validation import  check_is_fitted
 from sklearn.exceptions import NotFittedError
 
@@ -373,6 +374,9 @@ class BaseBertEstimator(BaseEstimator):
         # finetune model!
         self.model = finetune(self.model, texts_a, texts_b, labels, config)
 
+        # set classes attribute
+        self.classes_ = self.label_list
+
         return self
 
     def setup_eval(self, texts_a, texts_b, labels):
@@ -481,6 +485,25 @@ class BertClassifier(BaseBertEstimator, ClassifierMixin):
     """
     A text classifier built on top of a pretrained Bert model.
     """
+    def __init__():
+        self.thresholds = None
+        
+    def set_thresholds(self, d_thresholds):
+        ''' Set a multiplicative threshold for all classes.
+            A threshold of 1 doesn't affect the predictions.
+            This function expects a dictionary {class: threshold, ...},
+            where all classes not in the dict will be set a threshold of 1.
+        '''
+        if (hasattr(self, 'classes_')):
+            n_classes  = self.classes_.shape[0]
+            thresholds = np.ones(n_classes)
+            for key, value in d_thresholds.items():
+                idx = np.where(self.classes_ == key)
+                if len(idx[0]) > 0:
+                    thresholds[idx[0][0]] = value
+            self.thresholds = preprocessing.normalize(thresholds.reshape(1,-1), norm='l1')
+        else:
+            raise NotFittedError('set_thresholds needs to be called after fitting')
 
     def predict_proba(self, X):
         """
@@ -518,7 +541,14 @@ class BertClassifier(BaseBertEstimator, ClassifierMixin):
             prob = prob.detach().cpu().numpy()
             probs.append(prob)
         sys.stdout.flush()
-        return np.vstack(tuple(probs))
+        probs = np.vstack(tuple(probs))
+        if self.thresholds is None:
+            return probs
+        else:
+            n_samples = probs.shape[0]
+            threshold_prod = np.tile(self.thresholds,(n_samples,1))
+            new_probs = np.multiply(threshold_prod, probs)
+            return (new_probs.T / new_probs.sum(axis=1)).T
 
     def predict(self, X):
         """
