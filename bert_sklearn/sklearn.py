@@ -376,6 +376,8 @@ class BaseBertEstimator(BaseEstimator):
 
         # set classes attribute
         self.classes_ = self.label_list
+        # set threshold to None as default
+        self.thresholds = None
 
         return self
 
@@ -485,9 +487,6 @@ class BertClassifier(BaseBertEstimator, ClassifierMixin):
     """
     A text classifier built on top of a pretrained Bert model.
     """
-    def __init__():
-        self.thresholds = None
-        
     def set_thresholds(self, d_thresholds):
         ''' Set a multiplicative threshold for all classes.
             A threshold of 1 doesn't affect the predictions.
