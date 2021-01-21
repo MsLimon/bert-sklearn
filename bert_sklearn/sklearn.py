@@ -187,6 +187,8 @@ class BaseBertEstimator(BaseEstimator):
         self.ignore_label = ignore_label
         self.majority_label = None
         self.majority_id = None
+        # set threshold to None as default
+        self.thresholds = None
 
         # if given a restore_file, then finish loading a previously finetuned
         # model. Normally a user wouldn't do this directly. This is called from
@@ -374,11 +376,6 @@ class BaseBertEstimator(BaseEstimator):
         # finetune model!
         self.model = finetune(self.model, texts_a, texts_b, labels, config)
 
-        # set classes attribute
-        self.classes_ = self.label_list
-        # set threshold to None as default
-        self.thresholds = None
-
         return self
 
     def setup_eval(self, texts_a, texts_b, labels):
@@ -488,21 +485,27 @@ class BertClassifier(BaseBertEstimator, ClassifierMixin):
     A text classifier built on top of a pretrained Bert model.
     """
     def set_thresholds(self, d_thresholds):
-        ''' Set a multiplicative threshold for all classes.
-            A threshold of 1 doesn't affect the predictions.
-            This function expects a dictionary {class: threshold, ...},
-            where all classes not in the dict will be set a threshold of 1.
+        ''' 
+        Set a multiplicative threshold for all classes.
+        A threshold of 1 doesn't affect the predictions.
+        This function expects a dictionary {class: threshold, ...},
+        where all classes not in the dict will be set a threshold of 1.
+
+        Raises
+        ----------
+        NotFittedError - if model has not been fitted yet
         '''
-        if (hasattr(self, 'classes_')):
-            n_classes  = self.classes_.shape[0]
-            thresholds = np.ones(n_classes)
-            for key, value in d_thresholds.items():
-                idx = np.where(self.classes_ == key)
-                if len(idx[0]) > 0:
-                    thresholds[idx[0][0]] = value
-            self.thresholds = preprocessing.normalize(thresholds.reshape(1,-1), norm='l1')
-        else:
-            raise NotFittedError('set_thresholds needs to be called after fitting')
+        check_is_fitted(self, ["model", "tokenizer"])
+        # set classes attribute
+        self.classes_ = self.label_list
+
+        n_classes  = self.classes_.shape[0]
+        thresholds = np.ones(n_classes)
+        for key, value in d_thresholds.items():
+            idx = np.where(self.classes_ == key)
+            if len(idx[0]) > 0:
+                thresholds[idx[0][0]] = value
+        self.thresholds = preprocessing.normalize(thresholds.reshape(1,-1), norm='l1')
 
     def predict_proba(self, X):
         """
